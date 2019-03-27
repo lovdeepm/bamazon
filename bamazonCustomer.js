@@ -20,59 +20,101 @@ console.log('before connect', connection.threadId);
 
 connection.connect(function(err) {
     if (err) throw err;
-
+    
+  
     console.log('after connect',connection.threadId);
 
     // run the start function after the connection is made to prompt the user
     start();
   });
-
-
+// function to start by asking a question about viewing the inventory//
   function start() {
-    connection.query("SELECT * FROM products", function(err, res) {
-      for (var i = 0; i < res.length; i++) {
-        console.log(res[i].item_id + " | " + res[i].product_name + " | " + res[i].price);
-      }
-      console.log("-----------------------------------");
-    });
+    inquirer.prompt([{
 
-    inquirer
-    .prompt({
-      name: "action",
-      type: "list",
-      message: "What would you like to do?",
-      choices: [
-        "Find songs by artist",
-        "Find all artists who appear more than once",
-        "Find data within a specific range",
-        "Search for a specific song",
-        "exit"
-      ]
-    })
-    .then(function(answer) {
-      switch (answer.action) {
-      case "Find songs by artist":
-        artistSearch();
-        break;
+        type: "confirm",
+        name: "confirm",
+        message: "Welcome to Bamazon! Would you like to view our inventory?",
+        default: true
 
-      case "Find all artists who appear more than once":
-        multiSearch();
-        break;
-
-      case "Find data within a specific range":
-        rangeSearch();
-        break;
-
-      case "Search for a specific song":
-        songSearch();
-        break;
-          
-      case "exit":
-        connection.end();
-        break;
-      }
+    }]).then(function(answer) {
+        if (answer.confirm === true) {
+            displayInventory();
+        } else {
+            console.log("Thank you! Come back soon!");
+            connection.end();
+        }
     });
 }
+
+// function to display inventory
+function displayInventory() {
+  connection.query("SELECT * FROM products", function(err, res) {
+    for (var i = 0; i < res.length; i++) {
+      console.log(res[i].item_id + " | " + res[i].product_name + " | " + res[i].price);
+    }
+    console.log("-----------------------------------");
+    startQuestions();
+  });
+  
+}
+  
+
+
+  function startQuestions() {
+    inquirer
+    .prompt([
+      {
+      name: "product",
+      type: "input",
+      message: "What is the ID of the product you would like to Purchase?",
+    },
+    {
+    name: "amount",
+      type: "input",
+      message: "How Many would you like to Purchase?",
+    }
+  ])
+    .then(function(answer) {
+      var item = answer.product;
+      var quantity = answer.amount;
+
+      // Check if item is instock
+
+      var checkItem = 'SELECT * FROM products WHERE ?';
+
+      connection.query(checkItem, {item_id: item}, function(err, data) {
+        if(err)
+        throw err;
+        if (data.length === 0) 
+        { console.log('Error: Invaled item ID, please select a valid ID')
+          startQuestions();
+
+        } else {
+          var productData = data[0];
+
+
+          if( quantity <= productData.stock_quantity) {
+
+            console.log('Congratulations, We have the item in Stock');
+
+
+            var update= 'UPDATE products SET stock_quantity = ' + (productData.stock_quantity - quantity) + ' WHERE item_id = ' + item;
+
+            connection.query(update, function(err, data) {
+
+              if (err)
+              throw err;
+              console.log('Your order has been placed! Your total is $' + productData.price * quantity);
+              connection.end();
+            })
+           } else{ 
+            console.log('Sorry, there is not enough product in stock, your order can not be placed as is. Please change the quantity');
+            displayInventory();
+            }
+          }
+        
+        })
+})}
 
 
 
